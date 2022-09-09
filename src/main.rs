@@ -1,6 +1,7 @@
 use std::ops::Add;
 
 /// A structure to represent 3D vectors
+#[derive(PartialEq, Debug)]
 struct Vec3 {
     x: f32,
     y: f32,
@@ -8,6 +9,11 @@ struct Vec3 {
 }
 
 impl Vec3 {
+    /// Construct a new Vec3 given three components.
+    pub fn new(x: f32, y: f32, z: f32) -> Self {
+        Self { x, y, z }
+    }
+
     /// Calculate the length using Pythagoras' theorem
     fn length(&self) -> f32 {
         let sum_of_squares = self.x.powi(2) + self.y.powi(2) + self.z.powi(2);
@@ -16,12 +22,6 @@ impl Vec3 {
     }
 }
 
-// When we want to share behaviours across multiple types, we use "traits". These
-// work similarly to "interfaces" in other languages. There are some special traits
-// which control the behaviour of operators, like the + operator. If we want to
-// support such an operator on our own types, we need only implement the requisite
-// trait.
-// In this case, we implement the "Add" trait.
 impl Add for Vec3 {
     /// The result of adding two 3D vectors is another 3D vector.
     type Output = Vec3;
@@ -37,19 +37,29 @@ impl Add for Vec3 {
 }
 
 fn main() {
-    let vec1 = Vec3 {
-        x: 1.0,
-        y: 4.0,
-        z: 2.0,
-    };
-    let vec2 = Vec3 {
-        x: 1.0,
-        y: 2.0,
-        z: 7.0,
-    };
+    let vec1 = Vec3::new(1.0, 4.0, 2.0);
+    let vec2 = Vec3::new(1.0, 2.0, 7.0);
 
-    // Now we can use the `+` operator on our vectors.
     let length = (vec1 + vec2).length();
 
     println!("Length: {length}");
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn some_lengths() {
+        assert_eq!(Vec3::new(1.0, 2.0, 2.0).length(), 3.0);
+        assert_eq!(Vec3::new(2.0, 10.0, 11.0).length(), 15.0);
+    }
+
+    #[test]
+    fn an_addition() {
+        assert_eq!(
+            Vec3::new(1.0, 2.0, 4.0) + Vec3::new(5.0, 3.0, 7.0),
+            Vec3::new(6.0, 5.0, 11.0)
+        );
+    }
 }

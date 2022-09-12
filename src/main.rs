@@ -7,6 +7,7 @@ use std::{
 };
 
 use byteorder::{ReadBytesExt, WriteBytesExt, BE};
+use rayon::prelude::{IntoParallelIterator, ParallelIterator};
 use serde::{Deserialize, Serialize};
 
 use geom::{Ray, Sphere};
@@ -65,27 +66,28 @@ fn main() -> anyhow::Result<()> {
     // Connect to the server
     let mut connection = Connection::new(TcpStream::connect("127.0.0.1:1234")?)?;
 
-    // Pull some rays and a scene from the server
-    let (rays, scene) =
-        if let Response::ReserveRays(rays, scene) = connection.request(Request::ReserveRays)? {
-            (rays, scene)
-        } else {
-            panic!("Expected to receive rays");
-        };
+    loop {
+        // Pull some rays and a scene from the server
+        let (rays, scene) =
+            if let Response::ReserveRays(rays, scene) = connection.request(Request::ReserveRays)? {
+                (rays, scene)
+            } else {
+                panic!("Expected to receive rays");
+            };
 
-    // Compute whether each ray intersects the scene
-    let results: Vec<_> = rays
-        .into_iter()
-        .map(|ray| Outcome {
-            hit: scene
-                .spheres
-                .iter()
-                .any(|sphere| ray.intersects_sphere(sphere)),
-        })
-        .collect();
+        // Compute whether each ray intersects the scene
+        // Use rayon to checks the rays in parallel.
+        let results: Vec<_> = rays
+            .into_par_iter()
+            .map(|ray| Outcome {
+                hit: scene
+                    .spheres
+                    .iter()
+                    .any(|sphere| ray.intersects_sphere(sphere)),
+            })
+            .collect();
 
-    // Submit the results
-    connection.request(Request::SubmitResults(results))?;
-
-    Ok(())
+        // Submit the results
+        connection.request(Request::SubmitResults(results))?;
+    }
 }

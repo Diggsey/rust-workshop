@@ -3,12 +3,13 @@ mod vec;
 
 use std::{
     io::{Read, Write},
-    net::TcpStream,
+    net::{SocketAddr, TcpStream},
 };
 
 use byteorder::{ReadBytesExt, WriteBytesExt, BE};
 use rayon::prelude::{IntoParallelIterator, ParallelIterator};
 use serde::{Deserialize, Serialize};
+use structopt::StructOpt;
 
 use geom::{Ray, Sphere};
 use vec::Vec3;
@@ -17,17 +18,20 @@ use vec::Vec3;
 pub enum Request {
     ReserveRays,
     SubmitResults(Vec<Outcome>),
+    SetName(String),
 }
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct Outcome {
     pub hit: bool,
+    pub color: Option<Vec3>,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
 pub enum Response {
     ReserveRays(Vec<Ray>, Scene),
     SubmitResults,
+    SetName,
 }
 
 #[derive(Debug, Default, Serialize, Deserialize)]
@@ -62,9 +66,25 @@ impl Connection {
     }
 }
 
+#[derive(StructOpt)]
+struct Opt {
+    addr: SocketAddr,
+    #[structopt(long, default_value = "1,1,1")]
+    fg: Vec3,
+    #[structopt(long, default_value = "0,0,0")]
+    bg: Vec3,
+    #[structopt(long, default_value = "Unnamed")]
+    name: String,
+}
+
 fn main() -> anyhow::Result<()> {
+    let opt = Opt::from_args();
+
     // Connect to the server
-    let mut connection = Connection::new(TcpStream::connect("127.0.0.1:1234")?)?;
+    let mut connection = Connection::new(TcpStream::connect(opt.addr)?)?;
+
+    // Tell the server who we are
+    connection.request(Request::SetName(opt.name))?;
 
     loop {
         // Pull some rays and a scene from the server
@@ -79,11 +99,15 @@ fn main() -> anyhow::Result<()> {
         // Use rayon to checks the rays in parallel.
         let results: Vec<_> = rays
             .into_par_iter()
-            .map(|ray| Outcome {
-                hit: scene
+            .map(|ray| {
+                let hit = scene
                     .spheres
                     .iter()
-                    .any(|sphere| ray.intersects_sphere(sphere)),
+                    .any(|sphere| ray.intersects_sphere(sphere));
+                Outcome {
+                    hit,
+                    color: Some(if hit { opt.fg } else { opt.bg }),
+                }
             })
             .collect();
 

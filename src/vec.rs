@@ -1,6 +1,11 @@
-use std::ops::{Add, Mul, Sub};
+use std::{
+    num::ParseFloatError,
+    ops::{Add, Mul, Sub},
+    str::FromStr,
+};
 
 use serde::{Deserialize, Serialize};
+use thiserror::Error;
 
 /// A structure to represent 3D vectors
 #[derive(PartialEq, Debug, Copy, Clone, Serialize, Deserialize)]
@@ -72,6 +77,31 @@ impl Mul<Vec3> for f32 {
     }
 }
 
+impl FromStr for Vec3 {
+    type Err = ParseVecError;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        let parts: Vec<_> = s.split(',').collect();
+        if parts.len() == 3 {
+            Ok(Vec3::new(
+                parts[0].parse()?,
+                parts[1].parse()?,
+                parts[2].parse()?,
+            ))
+        } else {
+            Err(ParseVecError::WrongNumberOfComponents)
+        }
+    }
+}
+
+#[derive(Debug, Error, PartialEq)]
+pub enum ParseVecError {
+    #[error("Wrong number of components")]
+    WrongNumberOfComponents,
+    #[error("Invalid component")]
+    InvalidComponent(#[from] ParseFloatError),
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -101,5 +131,10 @@ mod tests {
     #[test]
     fn a_multiplication() {
         assert_eq!(2.0 * Vec3::new(1.0, 2.0, 3.0), Vec3::new(2.0, 4.0, 6.0));
+    }
+
+    #[test]
+    fn from_str() {
+        assert_eq!("1,0,2".parse(), Ok(Vec3::new(1.0, 0.0, 2.0)));
     }
 }

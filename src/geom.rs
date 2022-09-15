@@ -14,9 +14,15 @@ pub struct Ray {
     /// Direction should always be a unit vector (have length 1)
     pub direction: Vec3,
 }
+#[derive(Debug)]
+pub struct Intersection {
+    pub distance: f32,
+    pub position: Vec3,
+    pub normal: Vec3,
+}
 
 impl Ray {
-    pub fn intersects_sphere(&self, sphere: &Sphere) -> bool {
+    pub fn intersect_sphere(&self, sphere: &Sphere) -> Option<Intersection> {
         // Compute a vector from the beginning of the ray to the center of the sphere
         let offset = sphere.center - self.origin;
 
@@ -26,7 +32,7 @@ impl Ray {
 
         // Don't consider intersections "behind" the ray.
         if distance_along_ray < 0.0 {
-            return false;
+            return None;
         }
 
         // Find the coordinates of that closest point
@@ -36,7 +42,31 @@ impl Ray {
         let ray_sphere_distance = (sphere.center - closest_point).length();
 
         // Check if that distance is less than the sphere's radius
-        ray_sphere_distance <= sphere.radius
+        if ray_sphere_distance <= sphere.radius {
+            // Use pythagoras' theorem to find out how far the closest point is into the sphere
+            let distance_into_sphere = (sphere.radius.powi(2) - ray_sphere_distance.powi(2)).sqrt();
+            // Subtract that distance from our original distance calculation to find where the ray
+            // first entered the sphere.
+            let distance = distance_along_ray - distance_into_sphere;
+
+            // Now we have that distance, we can calculate the position of intersection
+            let position = self.origin + distance * self.direction;
+
+            // And with the position, we can subtract the sphere's center and normalize
+            let normal = (1.0 / sphere.radius) * (position - sphere.center);
+            Some(Intersection {
+                distance,
+                position,
+                normal,
+            })
+        } else {
+            None
+        }
+    }
+
+    // By deferring to our new function, we can reuse our tests
+    pub fn intersects_sphere(&self, sphere: &Sphere) -> bool {
+        self.intersect_sphere(sphere).is_some()
     }
 }
 

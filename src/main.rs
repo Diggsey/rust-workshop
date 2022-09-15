@@ -7,6 +7,7 @@ use std::{
 };
 
 use byteorder::{ReadBytesExt, WriteBytesExt, BE};
+use ordered_float::NotNan;
 use rayon::prelude::{IntoParallelIterator, ParallelIterator};
 use serde::{Deserialize, Serialize};
 use snap::raw::{Decoder, Encoder};
@@ -79,6 +80,32 @@ struct Opt {
     name: String,
 }
 
+const LIGHT_DIRECTION: Vec3 = Vec3::new(-4.0 / 9.0, 8.0 / 9.0, 1.0 / 9.0);
+
+fn compute_result(ray: Ray, scene: &Scene, opt: &Opt) -> Outcome {
+    // Find the closest intersection (if any)
+    let maybe_intersection = scene
+        .spheres
+        .iter()
+        .filter_map(|sphere| ray.intersect_sphere(sphere))
+        .min_by_key(|intersection| {
+            NotNan::new(intersection.distance).expect("Intersection distance to be well defined")
+        });
+
+    if let Some(intersection) = maybe_intersection {
+        let lightness = -LIGHT_DIRECTION.dot(&intersection.normal);
+        Outcome {
+            hit: true,
+            color: Some(opt.fg + Vec3::new(lightness, lightness, lightness)),
+        }
+    } else {
+        Outcome {
+            hit: false,
+            color: Some(opt.bg),
+        }
+    }
+}
+
 fn main() -> anyhow::Result<()> {
     let opt = Opt::from_args();
 
@@ -86,7 +113,7 @@ fn main() -> anyhow::Result<()> {
     let mut connection = Connection::new(TcpStream::connect(opt.addr)?)?;
 
     // Tell the server who we are
-    connection.request(Request::SetName(opt.name))?;
+    connection.request(Request::SetName(opt.name.clone()))?;
 
     loop {
         // Pull some rays and a scene from the server
@@ -101,16 +128,7 @@ fn main() -> anyhow::Result<()> {
         // Use rayon to checks the rays in parallel.
         let results: Vec<_> = rays
             .into_par_iter()
-            .map(|ray| {
-                let hit = scene
-                    .spheres
-                    .iter()
-                    .any(|sphere| ray.intersects_sphere(sphere));
-                Outcome {
-                    hit,
-                    color: Some(if hit { opt.fg } else { opt.bg }),
-                }
-            })
+            .map(|ray| compute_result(ray, &scene, &opt))
             .collect();
 
         // Submit the results

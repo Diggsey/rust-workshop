@@ -73,7 +73,7 @@ impl Connection {
 struct Opt {
     addr: SocketAddr,
     #[structopt(long, default_value = "1,1,1")]
-    fg: Vec3,
+    fg: Vec<Vec3>,
     #[structopt(long, default_value = "0,0,0")]
     bg: Vec3,
     #[structopt(long, default_value = "Unnamed")]
@@ -87,16 +87,37 @@ fn compute_result(ray: Ray, scene: &Scene, opt: &Opt) -> Outcome {
     let maybe_intersection = scene
         .spheres
         .iter()
-        .filter_map(|sphere| ray.intersect_sphere(sphere))
-        .min_by_key(|intersection| {
-            NotNan::new(intersection.distance).expect("Intersection distance to be well defined")
+        .enumerate()
+        .filter_map(|(i, sphere)| {
+            ray.intersect_sphere(sphere)
+                .map(|intersection| (i, intersection))
+        })
+        .min_by_key(|tuple| {
+            NotNan::new(tuple.1.distance).expect("Intersection distance to be well defined")
         });
 
-    if let Some(intersection) = maybe_intersection {
+    if let Some((index, intersection)) = maybe_intersection {
+        // Compute a value from 0..[number of foreground colours - 1] that
+        // we can use as a position along the gradient.
+        let gradient = (index * (opt.fg.len() - 1)) as f32 / scene.spheres.len() as f32;
+
+        // Since our position is not a whole number, find the foreground colour to
+        // the left of our position.
+        let fg1 = opt.fg[gradient.floor() as usize];
+        // And the foreground colour to our right.
+        let fg2 = opt.fg[gradient.ceil() as usize];
+
+        // And compute a value from 0..1 indicating where we are between those two colours.
+        let f = gradient.fract();
+
+        // Also apply our lighting from the previous step
         let lightness = -LIGHT_DIRECTION.dot(&intersection.normal);
         Outcome {
             hit: true,
-            color: Some(opt.fg + Vec3::new(lightness, lightness, lightness)),
+            color: Some(
+                // Linear interpolation between `fg1` and `fg2` based on `f`
+                (1.0 - f) * fg1 + f * fg2 + Vec3::new(lightness, lightness, lightness),
+            ),
         }
     } else {
         Outcome {

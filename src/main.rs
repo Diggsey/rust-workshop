@@ -82,7 +82,7 @@ struct Opt {
 
 const LIGHT_DIRECTION: Vec3 = Vec3::new(-4.0 / 9.0, 8.0 / 9.0, 1.0 / 9.0);
 
-fn compute_result(ray: Ray, scene: &Scene, opt: &Opt) -> Outcome {
+fn compute_result(ray: Ray, scene: &Scene, opt: &Opt, bounces: usize) -> Outcome {
     // Find the closest intersection (if any)
     let maybe_intersection = scene
         .spheres
@@ -112,12 +112,35 @@ fn compute_result(ray: Ray, scene: &Scene, opt: &Opt) -> Outcome {
 
         // Also apply our lighting from the previous step
         let lightness = -LIGHT_DIRECTION.dot(&intersection.normal);
+
+        let diffuse_color = (1.0 - f) * fg1 + f * fg2;
+
+        let combined_color = if bounces > 0 {
+            // Materials tend to be more reflective as the angle of incidence increases
+            let reflectivity = (1.0 - intersection.normal.dot(&ray.direction).powi(2)) * 0.7;
+            let reflected_direction = ray.direction.reflection(&intersection.normal);
+            // Advance the ray a small amount to avoid hitting the same sphere
+            const EPSILON: f32 = 1e-6;
+            let reflected_color = compute_result(
+                Ray {
+                    origin: intersection.position + EPSILON * reflected_direction,
+                    direction: reflected_direction,
+                },
+                scene,
+                opt,
+                bounces - 1,
+            )
+            .color
+            .expect("Color to be returned");
+
+            (1.0 - reflectivity) * diffuse_color + reflectivity * reflected_color
+        } else {
+            diffuse_color
+        };
+
         Outcome {
             hit: true,
-            color: Some(
-                // Linear interpolation between `fg1` and `fg2` based on `f`
-                (1.0 - f) * fg1 + f * fg2 + Vec3::new(lightness, lightness, lightness),
-            ),
+            color: Some(combined_color + Vec3::new(lightness, lightness, lightness)),
         }
     } else {
         Outcome {
@@ -149,7 +172,7 @@ fn main() -> anyhow::Result<()> {
         // Use rayon to checks the rays in parallel.
         let results: Vec<_> = rays
             .into_par_iter()
-            .map(|ray| compute_result(ray, &scene, &opt))
+            .map(|ray| compute_result(ray, &scene, &opt, 1))
             .collect();
 
         // Submit the results

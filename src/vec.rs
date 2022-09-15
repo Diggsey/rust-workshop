@@ -35,6 +35,11 @@ impl Vec3 {
     pub fn dot(&self, rhs: &Self) -> f32 {
         self.x * rhs.x + self.y * rhs.y + self.z * rhs.z
     }
+
+    /// Compute the reflection of this vector in the supplied normal
+    pub fn reflection(&self, normal: &Self) -> Vec3 {
+        *self - (normal.dot(self) * 2.0) * *normal
+    }
 }
 
 impl Add for Vec3 {

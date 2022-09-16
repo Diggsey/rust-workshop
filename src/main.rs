@@ -37,6 +37,7 @@ pub enum Response {
 
 #[derive(Debug, Default, Serialize, Deserialize)]
 pub struct Scene {
+    pub frame: u64,
     pub spheres: Vec<Sphere>,
 }
 
@@ -48,13 +49,13 @@ impl Connection {
     fn new(mut stream: TcpStream) -> anyhow::Result<Self> {
         stream.set_nodelay(true)?;
         // Indicate to the server what version of the protocol we are speaking
-        stream.write_u32::<BE>(1)?;
+        stream.write_u32::<BE>(2)?;
         Ok(Self { stream })
     }
 
     fn request(&mut self, request: Request) -> anyhow::Result<Response> {
         // Encode request
-        let request_data = Encoder::new().compress_vec(&serde_json::to_vec(&request)?)?;
+        let request_data = Encoder::new().compress_vec(&postcard::to_allocvec(&request)?)?;
         self.stream.write_u32::<BE>(request_data.len() as u32)?;
         self.stream.write_all(&request_data)?;
 
@@ -62,7 +63,7 @@ impl Connection {
         let response_size = self.stream.read_u32::<BE>()? as usize;
         let mut response_data = vec![0; response_size];
         self.stream.read_exact(&mut response_data)?;
-        let response = serde_json::from_slice(&Decoder::new().decompress_vec(&response_data)?)?;
+        let response = postcard::from_bytes(&Decoder::new().decompress_vec(&response_data)?)?;
         Ok(response)
     }
 }

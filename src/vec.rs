@@ -1,7 +1,9 @@
 use std::ops::{Add, Mul, Sub};
 
+use serde::{Deserialize, Serialize};
+
 /// A structure to represent 3D vectors
-#[derive(PartialEq, Debug, Copy, Clone)]
+#[derive(PartialEq, Debug, Copy, Clone, Serialize, Deserialize)]
 pub struct Vec3 {
     pub x: f32,
     pub y: f32,

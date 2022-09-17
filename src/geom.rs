@@ -1,10 +1,14 @@
+use serde::{Deserialize, Serialize};
+
 use crate::Vec3;
 
+#[derive(Debug, Copy, Clone, Serialize, Deserialize)]
 pub struct Sphere {
     pub center: Vec3,
     pub radius: f32,
 }
 
+#[derive(Debug, Copy, Clone, Serialize, Deserialize)]
 pub struct Ray {
     pub origin: Vec3,
     /// Direction should always be a unit vector (have length 1)
